@@ -60,7 +60,11 @@ $(MULTIROM_ZIP_TARGET): multirom trampoline signapk bbootimg mrom_kexec_static m
 	@echo Copying primary files
 	@cp -a $(install_zip_path)/prebuilt-installer/* $(MULTIROM_INST_DIR)/
 	if $(TARGET_REQUIRES_BUMP); then \
-		cp -a $(install_zip_path)/bump/inject_boot_bump.sh $(MULTIROM_INST_DIR)/scripts/inject_boot.sh; \
+		cp -a $(install_zip_path)/bump/inject_boot.sh $(MULTIROM_INST_DIR)/scripts/inject_boot.sh; \
+		cp -a $(install_zip_path)/bump/extract_multirom.sh $(MULTIROM_INST_DIR)/scripts/extract_multirom.sh; \
+		cp -a $(install_zip_path)/bump/livebump.sh $(MULTIROM_INST_DIR)/multirom/; \
+		cp -a $(install_zip_path)/bump/mkbootimg $(MULTIROM_INST_DIR)/multirom/; \
+		cp -a $(install_zip_path)/bump/unpackbootimg $(MULTIROM_INST_DIR)/multirom/; \
 	fi
 	@cp -a $(TARGET_ROOT_OUT)/multirom $(MULTIROM_INST_DIR)/multirom/
 	@cp -a $(TARGET_ROOT_OUT)/trampoline $(MULTIROM_INST_DIR)/multirom/

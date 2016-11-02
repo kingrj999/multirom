@@ -30,6 +30,10 @@
 #include "../no_kexec.h"
 #endif
 
+#ifdef TARGET_REQUIRES_BUMP
+#include "../bump.h"
+#endif
+
 // clone libbootimg to /system/extras/ from
 // https://github.com/Tasssadar/libbootimg.git
 #include <libbootimg.h>
@@ -335,6 +339,30 @@ int inject_bootimg(const char *img_path, int force)
         if(libbootimg_write_img(&img, tmp) >= 0)
         {
             INFO("Writing boot.img updated with trampoline v%d\n", VERSION_TRAMPOLINE);
+#ifdef TARGET_REQUIRES_BUMP
+            if(bump_bootimg(tmp) < 0)
+            {
+                ERROR("Failed to bump boot.img at %s!\n", tmp);
+                remove(tmp);
+                goto exit;
+            }
+            else
+                INFO("Bump'd boot.img at %s!\n", tmp);
+
+            if (strstr(img_path, ".img"))
+            {
+                remove(img_path);
+            }
+            else
+            {
+                if(wipe_boot(img_path) < 0)
+                {
+                    ERROR("Failed to wipe boot.img at %s!\n", img_path);
+                    remove(tmp);
+                    goto exit;
+                }
+            }
+#endif
             if(copy_file(tmp, img_path) < 0)
                 ERROR("Failed to copy %s to %s!\n", tmp, img_path);
             else

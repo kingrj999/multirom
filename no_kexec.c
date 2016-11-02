@@ -40,6 +40,9 @@
 
 #include "no_kexec.h"
 
+#ifdef TARGET_REQUIRES_BUMP
+#include "bump.h"
+#endif
 
 struct struct_nokexec nokexec_s;
 
@@ -225,6 +228,13 @@ int nokexec_flash_to_primary(const char * source)
         }
     }
 
+#ifdef TARGET_REQUIRES_BUMP
+    if(wipe_boot(nokexec_s.path_boot_mmcblk) < 0)
+    {
+        res = -1;
+    }
+#endif
+
     if (res == 0)
         INFO(NO_KEXEC_LOG_TEXT ": flashing '%s' to boot partition; res=%d\n", source, res = copy_file(source, nokexec_s.path_boot_mmcblk));
 
@@ -349,6 +359,13 @@ int nokexec_restore_primary_and_cleanup(void)
         }
         else
         {
+#ifdef TARGET_REQUIRES_BUMP
+            if(bump_bootimg(nokexec_s.path_primary_bootimg) < 0)
+                ERROR("Failed bump boot.img at %s!\n", nokexec_s.path_primary_bootimg);
+            else
+                INFO("Bump'd boot.img at %s!\n", nokexec_s.path_primary_bootimg);
+#endif
+
             if (nokexec_flash_to_primary(nokexec_s.path_primary_bootimg))
                 return -3;
         }

@@ -61,6 +61,11 @@ else
 endif
 endif
 
+ifeq ($(TARGET_REQUIRES_BUMP),true)
+    LOCAL_CFLAGS += -DTARGET_REQUIRES_BUMP
+    LOCAL_SRC_FILES += bump.c
+endif
+
 ifeq ($(MR_UNIFIED_TABS),true)
     LOCAL_CFLAGS += -DMR_UNIFIED_TABS
 endif

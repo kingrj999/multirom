@@ -53,6 +53,10 @@ ifeq ($(MR_QCOM_OVERLAY_USE_VSYNC),true)
 endif
 endif
 
+ifeq ($(TARGET_REQUIRES_BUMP),true)
+    common_C_FLAGS += -DTARGET_REQUIRES_BUMP
+    common_SRC_FILES += ../bump.c
+endif
 
 
 include $(CLEAR_VARS)
