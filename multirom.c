@@ -302,6 +302,8 @@ int multirom(const char *rom_to_boot)
 
             strcpy(part_uuid, uuid_ptr + sizeof("++uuid=") - 1);
 
+            // Note: if the current ROM is on the same external partition as the one being booted
+            //       then this function would already have been called in multirom_load_status
             multirom_update_and_scan_for_external_roms(&s, part_uuid);
 
             rom = multirom_get_rom(&s, name, part_uuid);
@@ -624,6 +626,45 @@ int multirom_apk_get_roms(struct multirom_status *s)
         return -1;
     }
 
+    char current_rom[256] = { 0 };
+    s->curr_rom_part = NULL;
+
+    /* Read multirom.ini to find current_rom */
+    char arg[256];
+    sprintf(arg, "%s/multirom.ini", mrom_dir());
+
+    FILE *f = fopen(arg, "re");
+    if(f)
+    {
+        char line[1024];
+
+        char name[64];
+        char *pch;
+
+        while((fgets(line, sizeof(line), f)))
+        {
+            pch = strtok (line, "=\n");
+            if(!pch) continue;
+            strcpy(name, pch);
+            pch = strtok (NULL, "=\n");
+            if(!pch) continue;
+            strcpy(arg, pch);
+
+            if(strstr(name, "current_rom"))
+                strcpy(current_rom, arg);
+            else if(strstr(name, "curr_rom_part"))
+                s->curr_rom_part = strdup(arg);
+        }
+
+        printf("current_rom='%s' curr_rom_part='%s'\n", current_rom, (s->curr_rom_part ? s->curr_rom_part : ""));
+
+        fclose(f);
+    }
+    else
+    {
+        printf("Failed to open config file, setting current_rom to null!\n");
+    }
+
     /* Get Internal ROM */
     char roms_path[256];
     sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, mrom_dir());
@@ -700,10 +741,21 @@ int multirom_apk_get_roms(struct multirom_status *s)
     multirom_update_partitions(s);
 
     int i;
-    for(i = 0; s->partitions && s->partitions[i]; ++i) {
-        //printf("part=%s\n", s->partitions[i]->mount_path);
+    pthread_mutex_lock(&parts_mutex);
+    for(i = 0; s->partitions && s->partitions[i]; ++i)
+    {
         s->partitions[i]->keep_mounted = 1; // don't unmount on exit, the APK will need access to the folders
         multirom_scan_partition_for_roms(s, s->partitions[i]);
+    }
+    pthread_mutex_unlock(&parts_mutex);
+
+
+    s->current_rom = multirom_get_rom(s, current_rom, s->curr_rom_part);
+    if(!s->current_rom)
+    {
+        printf("Failed to find current rom (%s, part %s)!\n", current_rom, (s->curr_rom_part) ? s->curr_rom_part : "");
+        free(s->curr_rom_part);
+        s->curr_rom_part = NULL;
     }
 
     return 0;
@@ -2728,7 +2780,18 @@ int is_mounted_properly(const char *src, const char *mnt_path)
             mount_type[255] = 0;
             mount_opts[255] = 0;
             if ((match == 6) && (strcmp(src, mount_dev) == 0) && (strcmp(mnt_path, mount_dir) == 0)) {
-                res = 1;
+                // check if the dir is empty, if so even though the mount entry exists, the actual path isn't mounted
+                int n = 0;
+                DIR *dir = opendir(mnt_path);
+                if (dir) {
+                    while (readdir(dir)) {
+                        if (++n > 2) {
+                            res = 1;
+                            break;
+                        }
+                    }
+                    closedir(dir);
+                }
                 break;
             }
         } while (match != EOF);
@@ -2793,26 +2856,36 @@ int multirom_mount_usb(struct usb_partition *part)
 
 void multirom_update_and_scan_for_external_roms(struct multirom_status *s, char *part_uuid)
 {
-    struct usb_partition *p = NULL;
-    int tries = 0;
-    while(!p && tries < 10) // is 10seconds enough for USB-OTG
+    if (!s->partitions)
     {
-        multirom_update_partitions(s);
-        p = multirom_get_partition(s, part_uuid);
-
-        if(p)
+        // no external partitions exist, so either there are none, or this is first run
+        // so we can proceed in the normal fashion
+        struct usb_partition *p = NULL;
+        int tries = 0;
+        while(!p && tries < 10) // is 10seconds enough for USB-OTG
         {
-            multirom_scan_partition_for_roms(s, p);
-            break;
+            multirom_update_partitions(s);
+
+            p = multirom_get_partition(s, part_uuid);
+
+            if(p)
+            {
+                multirom_scan_partition_for_roms(s, p);
+                break;
+            }
+
+            ++tries;
+            ERROR("part %s not found, waiting 1s (%d)\n", part_uuid, tries);
+            sleep(1);
         }
-
-        ++tries;
-        ERROR("part %s not found, waiting 1s (%d)\n", s->curr_rom_part, tries);
-        sleep(1);
     }
-
-    if(p)
-        multirom_dump_status(s);
+    else
+    {
+        // external partition exist, multirom_update_partitions will destroy all partitions information, so
+        // so we'll just use multirom_find_usb_roms(s) to repopulate everything, the alternative is just too
+        // much unnecessary code
+        multirom_find_usb_roms(s);
+    }
 }
 
 void *multirom_usb_refresh_thread_work(void *status)
