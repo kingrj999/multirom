@@ -65,6 +65,10 @@ ifeq ($(TARGET_REQUIRES_BUMP),true)
     LOCAL_SRC_FILES += bump.c
 endif
 
+ifeq ($(MR_UNIFIED_TABS),true)
+    LOCAL_CFLAGS += -DMR_UNIFIED_TABS
+endif
+
 include $(BUILD_EXECUTABLE)
 
 
