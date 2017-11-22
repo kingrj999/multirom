@@ -193,6 +193,8 @@ static int mount_and_run(struct fstab *fstab)
 
     mkdir(REALDATA, 0755);
 
+    adb_init("/mrom_enc");
+
     if(try_mount_all_entries(fstab, datap) < 0)
     {
 #ifndef MR_ENCRYPTION
