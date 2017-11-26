@@ -422,6 +422,27 @@ int multirom(const char *rom_to_boot)
                 exit = (EXIT_REBOOT | EXIT_UMOUNT);
                 goto finish;
             }
+#ifdef MR_ENCRYPTION
+            else if ((to_boot->type == ROM_DEFAULT))
+            {
+                // Flash secondary boot.img, and reboot
+                // note: a secondary boot.img in primary slot will trigger second_boot=1
+                //       so we don't need to worry about that any more
+                if (nokexec_flash_enc_bootimg(to_boot) < 0)
+                    MR_NO_KEXEC_ABORT;
+
+                s.current_rom = to_boot;
+
+                free(s.curr_rom_part);
+                s.curr_rom_part = NULL;
+
+                if(to_boot->partition)
+                    s.curr_rom_part = strdup(to_boot->partition->uuid);
+
+                exit = (EXIT_REBOOT | EXIT_UMOUNT);
+                goto finish;
+            }
+#endif
         }
 #endif
 

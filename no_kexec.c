@@ -187,11 +187,88 @@ int nokexec_set_secondary_flag(void)
     return res;
 }
 
+int nokexec_set_enc_flag(void)
+{
+    // echo -ne "\x71" | dd of=/dev/nk bs=1 seek=63 count=1 conv=notrunc
+    int res = -1;
+    struct bootimg img;
+
+    // make note that the primary slot now contains a secondary boot.img
+    // by tagging the BOOT_NAME at the very end, even after a null terminated "tr_verNN" string
+    INFO(NO_KEXEC_LOG_TEXT ": Going to tag the bootimg in primary slot as enc\n");
+
+    if (libbootimg_init_load(&img, nokexec_s.path_boot_mmcblk, LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", nokexec_s.path_boot_mmcblk);
+        return -1;
+    }
+
+    // Update the boot.img
+    img.hdr.name[BOOT_NAME_SIZE-1] = 0xEB;
+
+    INFO(NO_KEXEC_LOG_TEXT ": Writing boot.img updated with enc flag set\n");
+    if (libbootimg_write_img(&img, nokexec_s.path_boot_mmcblk) < 0)
+    {
+        ERROR("Failed to libbootimg_write_img!\n");
+    }
+    else
+        res = 0;
+
+    libbootimg_destroy(&img);
+    return res;
+}
+
+int nokexec_unset_enc_flag(const char * source)
+{
+    // echo -ne "\x71" | dd of=/dev/nk bs=1 seek=63 count=1 conv=notrunc
+    int res = -1;
+    struct bootimg img;
+    char * sourceimg = NULL;
+
+    if (source != NULL)
+        sourceimg = source;
+    else
+        sourceimg = nokexec_s.path_boot_mmcblk;
+
+    // make note that the primary slot now contains a secondary boot.img
+    // by tagging the BOOT_NAME at the very end, even after a null terminated "tr_verNN" string
+    INFO(NO_KEXEC_LOG_TEXT ": Going to tag the bootimg in primary slot as normal\n");
+
+    if (libbootimg_init_load(&img, sourceimg, LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", sourceimg);
+        return -1;
+    }
+
+    // Update the boot.img
+    img.hdr.name[BOOT_NAME_SIZE-1] = 0x00;
+
+    INFO(NO_KEXEC_LOG_TEXT ": Writing boot.img updated with enc flag unset\n");
+    if (libbootimg_write_img(&img, sourceimg) < 0)
+    {
+        ERROR("Failed to libbootimg_write_img!\n");
+    }
+    else
+        res = 0;
+
+    libbootimg_destroy(&img);
+    return res;
+}
+
 int nokexec_backup_primary(void)
 {
     int res;
 
     INFO(NO_KEXEC_LOG_TEXT ": backing up primary boot.img; res=%d\n", res = copy_file(nokexec_s.path_boot_mmcblk, nokexec_s.path_primary_bootimg));
+
+    return res;
+}
+
+int nokexec_backup_primary_boot(const char * source)
+{
+    int res;
+
+    INFO(NO_KEXEC_LOG_TEXT ": backing up primary boot.img; res=%d\n", res = copy_file(nokexec_s.path_boot_mmcblk, source));
 
     return res;
 }
@@ -261,6 +338,28 @@ int nokexec_is_secondary_in_primary(const char *path_boot_mmcblk)
     return res;
 }
 
+#ifdef MR_ENCRYPTION
+int nokexec_is_encboot_in_primary(const char *path_boot_mmcblk)
+{
+    int res = 0;
+    struct boot_img_hdr hdr;
+
+    if (libbootimg_load_header(&hdr, path_boot_mmcblk) < 0)
+    {
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", path_boot_mmcblk);
+        res = -1;
+    }
+    else
+    {
+        if (hdr.name[BOOT_NAME_SIZE-1] == 0xEB)
+            res = 1;
+    }
+    INFO(NO_KEXEC_LOG_TEXT ": Checking the primary slot bootimg for the secondary tag; res=%d\n", res);
+
+    return res;
+}
+#endif
+
 int nokexec_is_new_primary(void)
 {
     int is_new = 0;
@@ -270,7 +369,11 @@ int nokexec_is_new_primary(void)
         is_new = 1;
 
     // if the current bootimg is not tagged, then it's new (2)
-    else if (!nokexec_is_secondary_in_primary(nokexec_s.path_boot_mmcblk))
+    else if (!nokexec_is_secondary_in_primary(nokexec_s.path_boot_mmcblk)
+#ifdef MR_ENCRYPTION
+             || !nokexec_is_encboot_in_primary(nokexec_s.path_boot_mmcblk)
+#endif
+            )
         is_new = 2;
 
     INFO(NO_KEXEC_LOG_TEXT ": Checking if primary is new; is_new=%d\n", is_new);
@@ -317,6 +420,41 @@ int nokexec_is_second_boot(void)
 }
 
 
+int nokexec_is_enc_boot(void)
+{
+    static int is_second_boot = -1;
+    if(is_second_boot != -1) {
+        INFO(NO_KEXEC_LOG_TEXT ": returning cached info is_second_boot=%d\n", is_second_boot);
+        return is_second_boot;
+    }
+
+    int res;
+    INFO(NO_KEXEC_LOG_TEXT ": Checking primary slot...\n");
+    char * path_boot_mmcblk = nokexec_find_boot_mmcblk_path(NULL);
+    if (!path_boot_mmcblk)
+        return -1;
+
+    res = nokexec_is_encboot_in_primary(path_boot_mmcblk);
+    free(path_boot_mmcblk);
+
+    if (res < 0)
+        return -1;
+    else if (res == 1)
+    {
+        // it's a secondary boot.img so set second_boot=1
+        INFO(NO_KEXEC_LOG_TEXT ":    secondary bootimg, so second_boot=1\n");
+        is_second_boot = 1;
+    }
+    else
+    {
+        INFO(NO_KEXEC_LOG_TEXT ":    primary bootimg, so second_boot=0\n");
+        is_second_boot = 0;
+    }
+
+    return is_second_boot;
+}
+
+
 int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom)
 {
     // make sure all the paths are set up, otherwise abort
@@ -339,6 +477,33 @@ int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom)
 
     return 0;
 }
+
+#ifdef MR_ENCRYPTION
+int nokexec_flash_enc_bootimg(struct multirom_rom *internal_rom)
+{
+    // make sure all the paths are set up, otherwise abort
+    if (!nokexec_s.path_boot_mmcblk || !nokexec_s.path_primary_bootimg)
+        return -1;
+
+    if (nokexec_is_new_primary())
+        if (nokexec_backup_primary())
+            return -2;
+
+    // now flash the secondary boot.img to primary slot
+    char path_bootimg[256];
+    sprintf(path_bootimg, "%s/%s", internal_rom->base_path, "boot.img");
+    if (nokexec_backup_primary_boot(path_bootimg))
+        return -2;
+    if (nokexec_flash_to_primary(path_bootimg))
+        return -3;
+
+    // make note that the primary slot now contains a secondary boot.img
+    if (nokexec_set_enc_flag())
+        return -4;
+
+    return 0;
+}
+#endif
 
 int nokexec_restore_primary_and_cleanup(void)
 {

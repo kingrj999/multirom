@@ -40,6 +40,10 @@
 	#include "Populate_ByName_using_emmc.c"
 #endif
 
+#ifdef MR_NO_KEXEC
+#include "../no_kexec.h"
+#endif
+
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
 #define MULTIROM_BIN "multirom"
@@ -375,6 +379,17 @@ int main(int argc, char *argv[])
 
 #if 0
     fstab_dump(fstab); //debug
+#endif
+
+#ifdef MR_ENCRYPTION
+    // Detect secondary recovery boot
+    if (nokexec_is_enc_boot())
+    {
+        INFO("Enc boot detected, skipping multirom\n");
+        INFO("Restoring bootimg\n");
+        nokexec_unset_enc_flag(nokexec_find_boot_mmcblk_path(NULL));
+        goto run_main_init;
+    }
 #endif
 
     // mount and run multirom from sdcard
