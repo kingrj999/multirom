@@ -70,6 +70,17 @@ ifeq ($(MR_UNIFIED_TABS),true)
     LOCAL_CFLAGS += -DMR_UNIFIED_TABS
 endif
 
+ifeq ($(MR_ENCRYPTION),true)
+    LOCAL_CFLAGS += -DMR_ENCRYPTION
+    ifeq ($(MR_QSEECOMD_HAX),true)
+    ifeq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
+        $(error MR_NO_KEXEC is not set; this is needed for MR_QSEECOMD_HAX)
+    else
+        LOCAL_CFLAGS += -DMR_QSEECOMD_HAX
+    endif
+    endif
+endif
+
 include $(BUILD_EXECUTABLE)
 
 

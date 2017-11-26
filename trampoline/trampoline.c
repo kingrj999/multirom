@@ -43,6 +43,10 @@
 	#include "Populate_ByName_using_emmc.c"
 #endif
 
+#ifdef MR_NO_KEXEC
+#include "../no_kexec.h"
+#endif
+
 #include "trampoline.h"
 
 static char path_multirom[64] = { 0 };
@@ -360,6 +364,18 @@ static int run_core(void)
 
 #if 0
     fstab_dump(fstab); //debug
+#endif
+
+#ifdef MR_QSEECOMD_HAX
+    // Detect secondary recovery boot
+    if (nokexec_is_enc_boot())
+    {
+        INFO("Enc boot detected, skipping multirom\n");
+        INFO("Restoring bootimg\n");
+        nokexec_unset_enc_flag(nokexec_find_boot_mmcblk_path(NULL));
+        res = 0;
+        goto exit;
+    }
 #endif
 
     // mount and run multirom from sdcard
