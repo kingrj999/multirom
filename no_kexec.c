@@ -193,14 +193,20 @@ int nokexec_set_enc_flag(void)
     // echo -ne "\x71" | dd of=/dev/nk bs=1 seek=63 count=1 conv=notrunc
     int res = -1;
     struct bootimg img;
+    char * path_boot_mmcblk = NULL;
+
+    if (!nokexec_s.path_boot_mmcblk)
+        path_boot_mmcblk = nokexec_find_boot_mmcblk_path(NULL);
+    else
+        path_boot_mmcblk = nokexec_s.path_boot_mmcblk;
 
     // make note that the primary slot now contains a secondary boot.img
     // by tagging the BOOT_NAME at the very end, even after a null terminated "tr_verNN" string
     INFO(NO_KEXEC_LOG_TEXT ": Going to tag the bootimg in primary slot as enc\n");
 
-    if (libbootimg_init_load(&img, nokexec_s.path_boot_mmcblk, LIBBOOTIMG_LOAD_ALL) < 0)
+    if (libbootimg_init_load(&img, path_boot_mmcblk, LIBBOOTIMG_LOAD_ALL) < 0)
     {
-        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", nokexec_s.path_boot_mmcblk);
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", path_boot_mmcblk);
         return -1;
     }
 
@@ -208,7 +214,7 @@ int nokexec_set_enc_flag(void)
     img.hdr.name[BOOT_NAME_SIZE-1] = 0xEB;
 
     INFO(NO_KEXEC_LOG_TEXT ": Writing boot.img updated with enc flag set\n");
-    if (libbootimg_write_img(&img, nokexec_s.path_boot_mmcblk) < 0)
+    if (libbootimg_write_img(&img, path_boot_mmcblk) < 0)
     {
         ERROR("Failed to libbootimg_write_img!\n");
     }

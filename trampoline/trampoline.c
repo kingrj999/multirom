@@ -212,6 +212,14 @@ static int mount_and_run(struct fstab *fstab)
                 ERROR("/data decryption failed!\n");
                 return -1;
             case ENC_RES_BOOT_INTERNAL:
+#ifdef MR_QSEECOMD_HAX
+                nokexec_set_enc_flag();
+                sync();
+                android_reboot(ANDROID_RB_RESTART, 0, 0);
+                while (1)
+                    sleep(1);
+                // we're never returning
+#endif
                 return 0;
             case ENC_RES_BOOT_RECOVERY:
                 sync();
