@@ -50,6 +50,10 @@ include $(multirom_local_path)/device_defines.mk
 MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
 ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
     LOCAL_SRC_FILES += no_kexec.c
+
+    ifeq ($(MR_NO_KEXEC_DT_WORKAROUND),true)
+        LOCAL_CFLAGS += -DMR_NO_KEXEC_DT_WORKAROUND
+    endif
 endif
 
 ifneq ($(MR_DEVICE_HOOKS),)

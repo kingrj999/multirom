@@ -156,6 +156,37 @@ int nokexec_cleanup(void)
     return res;
 }
 
+#ifdef MR_NO_KEXEC_DT_WORKAROUND
+void replace_tag(char *cmdline, size_t cap, const char *tag, const char *what)
+{
+    char *start, *end;
+    char *str = cmdline;
+    char *str_end = str + strlen(str);
+    size_t replace_len = strlen(what);
+
+    while((start = strstr(str, tag)))
+    {
+        end = strstr(start, " ");
+        if(!end)
+            end = str_end;
+        else if(replace_len == 0)
+            ++end;
+
+        if(end != start)
+        {
+
+            size_t len = str_end - end;
+            if((start - cmdline)+replace_len+len > cap)
+                len = cap - replace_len - (start - cmdline);
+            memmove(start+replace_len, end, len+1); // with \0
+            memcpy(start, what, replace_len);
+        }
+
+        str = start+replace_len;
+    }
+}
+#endif
+
 int nokexec_set_secondary_flag(void)
 {
     // echo -ne "\x71" | dd of=/dev/nk bs=1 seek=63 count=1 conv=notrunc
@@ -174,6 +205,30 @@ int nokexec_set_secondary_flag(void)
 
     // Update the boot.img
     img.hdr.name[BOOT_NAME_SIZE-1] = 0x71;
+
+#ifdef MR_NO_KEXEC_DT_WORKAROUND
+    // Android O supports mounting the system partition early during init by reading the fstab
+    // entry from the device-tree. The device-tree entry gets mounted instead, overriding the
+    // partition multirom mounts. Fortunately, Android allows us to set a custom path for reading the
+    // device-tree entry. So, as a workaround for secondary roms, set an invalid path so that reading
+    // from the device-tree is skipped, and force fsmgr to fallback to the normal method.
+    // (This can be done in "mr_hooks.c" for kexec-kernels.)
+    if(img.hdr.cmdline[0] != 0)
+    {
+        img.hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
+
+        if(!strstr((char*)img.hdr.cmdline, "androidboot.android_dt_dir="))
+        {
+            // Append to cmdline
+            sprintf((char*)img.hdr.cmdline, "%s %s", (char*)img.hdr.cmdline, "androidboot.android_dt_dir=null");
+        }
+        else
+        {
+            // Replace entry in cmdline
+            replace_tag((char*)img.hdr.cmdline, BOOT_ARGS_SIZE, "androidboot.android_dt_dir=", "androidboot.android_dt_dir=null");
+        }
+    }
+#endif
 
     INFO(NO_KEXEC_LOG_TEXT ": Writing boot.img updated with secondary flag set\n");
     if (libbootimg_write_img(&img, nokexec_s.path_boot_mmcblk) < 0)
