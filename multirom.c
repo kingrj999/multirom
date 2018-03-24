@@ -438,22 +438,28 @@ int multirom(const char *rom_to_boot)
 #ifdef MR_QSEECOMD_HAX
             else if ((to_boot->type == ROM_DEFAULT))
             {
-                // Flash secondary boot.img, and reboot
-                // note: a secondary boot.img in primary slot will trigger second_boot=1
-                //       so we don't need to worry about that any more
-                if (nokexec_flash_enc_bootimg(to_boot) < 0)
-                    MR_NO_KEXEC_ABORT;
+                struct fstab_part *datap = fstab_find_first_by_path(s.fstab, "/data");
 
-                s.current_rom = to_boot;
+                // If data partition is encrypted perform workaround
+                if(datap && strstr(datap->device, "dm-"))
+                {
+                    // Flash secondary boot.img, and reboot
+                    // note: a secondary boot.img in primary slot will trigger second_boot=1
+                    //       so we don't need to worry about that any more
+                    if (nokexec_flash_enc_bootimg(to_boot) < 0)
+                        MR_NO_KEXEC_ABORT;
 
-                free(s.curr_rom_part);
-                s.curr_rom_part = NULL;
+                    s.current_rom = to_boot;
 
-                if(to_boot->partition)
-                    s.curr_rom_part = strdup(to_boot->partition->uuid);
+                    free(s.curr_rom_part);
+                    s.curr_rom_part = NULL;
 
-                exit = (EXIT_REBOOT | EXIT_UMOUNT);
-                goto finish;
+                    if(to_boot->partition)
+                        s.curr_rom_part = strdup(to_boot->partition->uuid);
+
+                    exit = (EXIT_REBOOT | EXIT_UMOUNT);
+                    goto finish;
+                }
             }
 #endif
         }
