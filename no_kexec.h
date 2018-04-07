@@ -81,9 +81,10 @@ void nokexec_free_struct(void);
 int nokexec_restore_primary_and_cleanup(void);
 int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom);
 #ifdef MR_QSEECOMD_HAX
-int nokexec_flash_enc_bootimg(struct multirom_rom *secondary_rom);
-int nokexec_is_enc_boot(void);
+int nokexec_set_enc_flag(void);
 int nokexec_unset_enc_flag(const char * source);
+int nokexec_is_enc_boot(void);
+int nokexec_flash_enc_bootimg(struct multirom_rom *secondary_rom);
 char *nokexec_find_boot_mmcblk_path(struct multirom_status *s);
 #endif
 
